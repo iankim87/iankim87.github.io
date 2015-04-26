@@ -1,0 +1,60 @@
+---
+title: "accelerometerData"
+author: "Ian Kim"
+date: "April 25, 2015"
+output: html_document
+---
+
+# Read and Subset Data
+Import libraries and read training data set.
+```{r}
+library(caret)
+library(randomForest)
+
+data <- read.csv("pml-training.csv")
+```
+
+Subset data for columns in data set containing accelerometer data only. Omit the 'var' variables, which are 'NA' for more than 50% of the observations. Also omit the 'total' variables, which appear to have been derived from the x, y, z variables so are assumed to be correlated with these variables. 
+```{r}
+df <- data.frame(data[,grep('accel', names(data))], data[160])
+df <- data.frame(df[,-grep('var', names(df))])
+df <- data.frame(df[,-grep('total', names(df))])
+```
+
+Per below, no variables are near zero variance, so no more variables will be omitted.
+```{r}
+nsv <- nearZeroVar(df, saveMetrics=TRUE)
+nsv
+```
+
+
+# Train and Evaluate Model
+Fit a model using random forests. Using this method, cross-validation is done internally in the process of generating the fitted model. The out-of-sample accuracy is estimated to be the out-of-bag (OOB) estimate (reference: http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr). Therefore, a separate explicit cross-validation step to get an unbiased estimate of the out-of-sample error is not required. We will fit the model on this entire data set.
+
+```{r}
+rf_model <- randomForest(classe~., data=df)
+rf_pred <- predict(rf_model, df)
+print(confusionMatrix(rf_pred, df$classe))
+print(rf_model)
+```
+This model achieves 100% accuracy on the training set. The out-of-sample accuracy is estimated to be the out-of-bag (OOB) estimate of error rate printed above: 4.3%.
+
+
+# Final Predictions Using Testing Set
+Finally, use this model to predict classes for the outcome variable for the separate testing set provided.
+```{r}
+data_testing <- read.csv("pml-testing.csv")
+final_pred <- predict(rf_model, data_testing)
+final_pred
+
+# write files for submission
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(final_pred)
+```
